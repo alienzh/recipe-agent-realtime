@@ -1,17 +1,21 @@
-# Agora Agent Backend — Translator Recipe
+# Agora Agent Backend — Realtime Recipe
 
 FastAPI service that owns Agora token generation and agent session lifecycle for
-the translator recipe. It is the service the web client reaches through the
+the realtime recipe. It is the service the web client reaches through the
 Next.js `/api/*` rewrite proxy (port 8000).
 
 ## What this service does
 
-Runs the translation pipeline using only Agora-managed vendors — **zero-key**:
+Runs a single `OpenAIRealtime` MLLM via `.with_mllm()` — **BYO-key, not zero-key**:
 
-**Pipeline:** `DeepgramSTT(language=SOURCE_LANG)` → `OpenAI` (translate to `TARGET_LANG`) → `MiniMaxTTS(voice_id=TTS_VOICE)`
+**Pipeline:** `OpenAIRealtime` MLLM (voice-to-voice, server_vad turn detection)
 
-The `OpenAI` vendor is Agora-managed (keyless by default). There is **no
-separate `llm/` service** in this recipe.
+The `OpenAIRealtime` vendor replaces the cascading STT→LLM→TTS with a single
+realtime model. `OPENAI_API_KEY` is required and is validated at agent start
+(not server boot), so the server starts even if the key is absent, but
+`/startAgent` returns 400 until the key is configured.
+
+There is **no separate `llm/` service** in this recipe.
 
 ## Run
 
@@ -31,20 +35,14 @@ python src/server.py
 
 - `AGORA_APP_ID` — Agora project App ID.
 - `AGORA_APP_CERTIFICATE` — Agora project App Certificate.
+- `OPENAI_API_KEY` — OpenAI key with Realtime API access (required; validated at agent start).
 
 Optional:
 
 | Variable | Default | Notes |
 | --- | :---: | --- |
-| `SOURCE_LANG` | `es` | Deepgram STT language code for the speaker |
-| `TARGET_LANG` | `English` | Language name used in the translation prompt |
-| `TTS_VOICE` | `English_captivating_female1` | MiniMax voice matching `TARGET_LANG` |
-| `OPENAI_MODEL` | `gpt-4o-mini` | OpenAI model for translation |
-| `OPENAI_API_KEY` | — | BYO only — Agora manages the OpenAI key by default (keyless). Set only if your account requires it. |
+| `OPENAI_MODEL` | `gpt-4o-realtime-preview` | OpenAI Realtime model name |
 | `AGENT_GREETING` | built-in | Optional opening line override |
-
-> Note: when you change `TARGET_LANG`, also pick a matching `TTS_VOICE` for
-> that target language.
 
 ## API
 

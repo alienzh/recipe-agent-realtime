@@ -1,8 +1,9 @@
-# Architecture — Translator Recipe
+# Architecture — Realtime Recipe
 
 Two processes. The browser talks only to Next.js `/api/*`, which rewrites to the
-agent backend. The agent backend owns Agora tokens and agent lifecycle. OpenAI is
-Agora-managed (keyless) — no separate LLM service is needed.
+agent backend. The agent backend owns Agora tokens and agent lifecycle.
+
+`OPENAI_API_KEY` is required — validated at agent start, not server boot.
 
 ## Request flow
 
@@ -14,44 +15,46 @@ Browser
 Next.js  (rewrites /api/* → AGENT_BACKEND_URL)
   ▼
 Agent backend (server/, :8000)
-  │  builds session with OpenAI(model=OPENAI_MODEL, system_messages=[translate to TARGET_LANG])
+  │  builds OpenAIRealtime MLLM via .with_mllm()
   ▼
 Agora ConvoAI Cloud
-  │  user speech → Deepgram STT (managed, language=SOURCE_LANG)
-  │  text → OpenAI translation (Agora-managed, keyless, model=OPENAI_MODEL)
-  │  translation → MiniMax TTS (managed, voice_id=TTS_VOICE)
+  │  user speech → OpenAI Realtime (voice-to-voice, server_vad)
+  │  agent speech → user's channel
   ▼
-User hears translated speech; RTM transcript + metrics → web UI
+User hears realtime voice response; RTM transcript + metrics → web UI
 ```
 
 `POST /api/stopAgent { agentId }` ends the session.
 
 ## Why no llm/ service
 
-Unlike the custom-llm recipe, the translator uses the **managed OpenAI vendor**
-(`agora_agent.agentkit.vendors.OpenAI`). Agora holds the OpenAI API key on its
-cloud; the recipe is zero-key by default. An optional `OPENAI_API_KEY` env var
-lets you bring your own account if needed.
+Unlike the custom-llm recipe family, the realtime recipe attaches a single
+`OpenAIRealtime` MLLM vendor via `agora_agent.with_mllm(mllm)`. This vendor
+handles the full voice-to-voice pipeline — STT, reasoning, and TTS are all
+internal to the OpenAI Realtime model. No cascading vendors are used, no
+separate mock service is needed, and no public tunnel is required.
 
-This means:
-- No `llm/` service to expose publicly.
-- No tunnel (ngrok) required.
-- The only required credentials are `AGORA_APP_ID` + `AGORA_APP_CERTIFICATE`.
+Trade-off: `OPENAI_API_KEY` with Realtime API access is required. The agent
+is **not zero-key**.
 
-## Translation prompt
+## MLLM vendor
 
-`server/src/translation_config.py` contains the pure `build_translation_system_messages`
-function, which builds the system prompt injected into every OpenAI call:
+`server/src/realtime_config.py` contains `build_realtime_mllm()`, which
+constructs an `OpenAIRealtime` vendor with:
 
-> "Translate the user's message into {TARGET_LANG}. Output only the translation,
-> with no extra commentary, quotation marks, or explanations."
+- `turn_detection={"mode": "server_vad"}` — vendor-side VAD; the top-level
+  cascading `turn_detection` on `AgoraAgent(...)` is not set.
+- `greeting_message` — optional opening utterance from the agent.
+- `input_modalities` — optional (e.g. `["text", "image"]` for vision variants).
+
+No tools — the OpenAI Realtime MLLM has no tool support in this SDK.
 
 ## API (agent backend, port 8000)
 
 | Endpoint | Method | Description |
 | --- | --- | --- |
 | `/get_config` | GET | Token + channel/UID config |
-| `/startAgent` | POST | Start the translation agent session |
+| `/startAgent` | POST | Start the realtime agent session |
 | `/stopAgent` | POST | Stop the agent by `agent_id` |
 
 The browser calls these as `/api/*`; Next rewrites them to `AGENT_BACKEND_URL`.
@@ -61,5 +64,4 @@ The browser calls these as `/api/*`; Next rewrites them to `AGENT_BACKEND_URL`.
 - Browser → agent backend: none (local dev).
 - Agent backend → Agora cloud: Token007, generated from `AGORA_APP_ID` +
   `AGORA_APP_CERTIFICATE`.
-- Agora cloud → OpenAI: Agora-managed key (transparent to this recipe).
-  Optionally overridden by `OPENAI_API_KEY` if provided.
+- Agora cloud → OpenAI Realtime: `OPENAI_API_KEY` (BYO — passed at agent start).

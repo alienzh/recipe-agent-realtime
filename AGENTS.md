@@ -1,21 +1,22 @@
 # Agent Development Guide
 
-For coding agents working in `recipe-agent-translator`. This repository is the
-**translator** recipe in the Agora Conversational AI recipes family.
+For coding agents working in `recipe-agent-realtime`. This repository is the
+**realtime** recipe in the Agora Conversational AI recipes family.
 
 ## System shape
 
 - **`server/`** — Python FastAPI agent backend (:8000). Owns Agora token
-  generation and agent session lifecycle. Uses the managed `OpenAI` vendor
-  (Agora-managed, keyless) for translation. SDK: `agora-agents>=2.0.0`
+  generation and agent session lifecycle. Uses `OpenAIRealtime` MLLM via
+  `.with_mllm()` — replaces the STT/LLM/TTS cascade. SDK: `agora-agents>=2.0.0`
   (`import agora_agent`).
 - **`web/`** — Next.js 16 / React 19 / TypeScript frontend (:3000).
 - Auth: Token007 from `AGORA_APP_ID` + `AGORA_APP_CERTIFICATE`.
-- No `llm/` service — OpenAI is Agora-managed (zero-key by default).
+- No `llm/` service — single-process, MLLM is BYO-key (OPENAI_API_KEY required).
 
 ## Pipeline
 
-`DeepgramSTT(language=SOURCE_LANG)` → `OpenAI` (translates to `TARGET_LANG`) → `MiniMaxTTS(voice=TTS_VOICE)`
+`OpenAIRealtime` MLLM via `.with_mllm()` — voice-to-voice, no separate STT/LLM/TTS.
+Turn detection is MLLM-owned (`server_vad`). No tools (MLLM is tool-less).
 
 ## Routing / ownership
 
@@ -23,7 +24,7 @@ For coding agents working in `recipe-agent-translator`. This repository is the
 - Browser-facing `/api/*` paths are Next rewrites (`web/next.config.ts`) to the
   agent backend; do not add `web/app/api/**/route.ts` for agent/token logic.
 - Token generation and agent lifecycle live in `server/src/`.
-- Translation prompt builder lives in `server/src/translation_config.py`.
+- MLLM vendor builder lives in `server/src/realtime_config.py`.
 
 ## Supported modes
 
@@ -39,26 +40,27 @@ For coding agents working in `recipe-agent-translator`. This repository is the
 |---|---|---|
 | `AGORA_APP_ID` | — | required |
 | `AGORA_APP_CERTIFICATE` | — | required |
-| `SOURCE_LANG` | `es` | Deepgram STT language code |
-| `TARGET_LANG` | `English` | Language name for translation prompt |
-| `TTS_VOICE` | `English_captivating_female1` | MiniMax voice matching `TARGET_LANG` |
-| `OPENAI_MODEL` | `gpt-4o-mini` | OpenAI model for translation |
-| `OPENAI_API_KEY` | — | optional — BYO only if your account requires it |
+| `OPENAI_API_KEY` | — | **required** — validated at agent start (not server boot); needs OpenAI Realtime API access |
+| `OPENAI_MODEL` | `gpt-4o-realtime-preview` | OpenAI Realtime model name |
+| `AGENT_GREETING` | built-in | Optional opening line override |
 
 ## Patterns
 
 - Keep the web client calling `/api/*`; hide backend placement behind Next rewrites.
 - Keep token generation and the App Certificate in `server/`.
-- `OPENAI_API_KEY` is optional: Agora manages the OpenAI key by default (keyless).
-- Changing `TARGET_LANG` means also picking a matching target-language `TTS_VOICE`.
+- `OPENAI_API_KEY` is validated in `agent.start()` — the server boots without it,
+  but `/startAgent` returns 400 until the key is set.
+- `turn_detection` is MLLM-owned (`server_vad`); do not set a top-level
+  `turn_detection` on `AgoraAgent(...)` when using `.with_mllm()`.
 
 ## Anti-patterns
 
-- Do not reintroduce `llm/` or the `CustomLLM` vendor.
+- Do not reintroduce `llm/` or the cascading STT/LLM/TTS vendors.
 - Do not reintroduce Next Route Handlers for agent/token logic.
 - Do not put `PORT` in `server/.env.example` (it would clobber the random port
   that `verify:local:fastapi` injects via `load_dotenv(override=True)`).
 - Do not link to `docs/ai/` — that progressive-disclosure tree is not present yet.
+- Do not add tools — the OpenAIRealtime MLLM has no tool support.
 
 ## Commands
 
