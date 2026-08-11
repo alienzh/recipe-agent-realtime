@@ -4,7 +4,8 @@ Agora Agent & Token Service — Realtime Recipe
 
 HTTP APIs:
 - GET  /get_config     -> Generate connection config
-- POST /startAgent     -> Start realtime voice agent
+- GET  /vendors       -> List selectable realtime MLLM vendors
+- POST /startAgent    -> Start realtime voice agent
 - POST /stopAgent      -> Stop agent
 """
 import logging
@@ -24,6 +25,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from agora_agent.agentkit.token import generate_convo_ai_token
 from agent import Agent
+from realtime_config import DEFAULT_VENDOR, available, needs_key, required_env
 
 logger = logging.getLogger("uvicorn.error")
 
@@ -61,7 +63,7 @@ except ValueError as e:
 app = FastAPI(
     title="Agora Realtime Recipe Service",
     version="1.0.0",
-    description="Agora Conversational AI — voice-to-voice realtime MLLM",
+    description="Agora Conversational AI - selectable voice-to-voice realtime MLLM",
 )
 
 app.add_middleware(
@@ -81,6 +83,7 @@ class StartAgentRequest(BaseModel):
     channelName: str
     rtcUid: int
     userUid: int
+    vendor: Optional[str] = None
     parameters: Optional[Dict[str, Any]] = None
 
 
@@ -154,12 +157,16 @@ async def start_agent(request: StartAgentRequest):
         if request.parameters:
             output_audio_codec = request.parameters.get("output_audio_codec")
 
-        result = await agent.start(
+        start_kwargs = dict(
             channel_name=request.channelName,
             agent_uid=request.rtcUid,
             user_uid=request.userUid,
             output_audio_codec=output_audio_codec,
         )
+        if request.vendor:
+            start_kwargs["vendor"] = request.vendor
+
+        result = await agent.start(**start_kwargs)
         return {"code": 0, "msg": "success", "data": result}
     except Exception as e:
         _log_route_error(
@@ -168,8 +175,33 @@ async def start_agent(request: StartAgentRequest):
             channelName=request.channelName,
             rtcUid=request.rtcUid,
             userUid=request.userUid,
+            vendor=request.vendor,
         )
         raise _to_http_error(e)
+
+
+@router.get("/vendors")
+async def list_vendors():
+    """List selectable realtime MLLM vendors for the web client."""
+    vendor_names = available()
+    default = os.getenv("MLLM_VENDOR", DEFAULT_VENDOR).strip().lower()
+    if default not in vendor_names:
+        default = DEFAULT_VENDOR
+    return {
+        "code": 0,
+        "data": {
+            "default": default,
+            "vendors": [
+                {
+                    "name": name,
+                    "needs_key": needs_key(name),
+                    "required_env": required_env(name),
+                }
+                for name in vendor_names
+            ],
+        },
+        "msg": "success",
+    }
 
 
 @router.post("/stopAgent")

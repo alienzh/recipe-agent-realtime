@@ -3,17 +3,24 @@
 import { Loader2 } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
+import type { VendorOption } from "@/services/api";
 
 type QuickstartPreCallCardProps = {
 	isLoading: boolean;
 	error: string | null;
 	onStartConversation: () => void;
+	vendors?: VendorOption[];
+	selectedVendor?: string;
+	onVendorChange?: (vendor: string) => void;
 };
 
 export function QuickstartPreCallCard({
 	isLoading,
 	error,
 	onStartConversation,
+	vendors,
+	selectedVendor,
+	onVendorChange,
 }: QuickstartPreCallCardProps) {
 	return (
 		<div
@@ -24,12 +31,36 @@ export function QuickstartPreCallCard({
 			}}
 		>
 			<h1 className="text-[28px] font-medium leading-[1.2] text-white">
-				Realtime
+				Realtime MLLM
 			</h1>
 			<p className="mt-[14px] text-sm font-medium leading-6 text-muted-foreground">
-				Talk to a single realtime voice-to-voice model (OpenAI Realtime) — no
-				separate STT/LLM/TTS. Needs your OpenAI Realtime API key.
+				Talk directly to a realtime voice-to-voice model with no separate
+				STT/LLM/TTS pipeline.
 			</p>
+
+			{vendors && vendors.length > 0 ? (
+				<div className="mt-6 w-full text-left">
+					<label
+						htmlFor="mllm-vendor"
+						className="text-xs font-medium uppercase tracking-wide text-muted-foreground"
+					>
+						Realtime provider
+					</label>
+					<select
+						id="mllm-vendor"
+						value={selectedVendor}
+						onChange={(event) => onVendorChange?.(event.target.value)}
+						disabled={isLoading}
+						className="mt-2 h-10 w-full rounded-lg border border-[#2b2b2b] bg-[#101010] px-3 text-sm text-white"
+					>
+						{vendors.map((vendor) => (
+							<option key={vendor.name} value={vendor.name}>
+								{vendor.name}
+							</option>
+						))}
+					</select>
+				</div>
+			) : null}
 
 			<Button
 				onClick={onStartConversation}

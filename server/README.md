@@ -6,14 +6,13 @@ Next.js `/api/*` rewrite proxy (port 8000).
 
 ## What this service does
 
-Runs a single `OpenAIRealtime` MLLM via `.with_mllm()` — **BYO-key, not zero-key**:
+Runs a selectable realtime MLLM via `.with_mllm()` — **BYO-key, not zero-key**:
 
-**Pipeline:** `OpenAIRealtime` MLLM (voice-to-voice, server_vad turn detection)
+**Pipeline:** `<MLLM_VENDOR>` (voice-to-voice, `server_vad` turn detection)
 
-The `OpenAIRealtime` vendor replaces the cascading STT→LLM→TTS with a single
-realtime model. `OPENAI_API_KEY` is required and is validated at agent start
-(not server boot), so the server starts even if the key is absent, but
-`/startAgent` returns 400 until the key is configured.
+OpenAI Realtime and Azure OpenAI Realtime are available. The selected vendor
+replaces the cascading STT→LLM→TTS pipeline with one realtime model. Provider
+settings are validated at agent start, not server boot.
 
 There is **no separate `llm/` service** in this recipe.
 
@@ -35,18 +34,26 @@ python src/server.py
 
 - `AGORA_APP_ID` — Agora project App ID.
 - `AGORA_APP_CERTIFICATE` — Agora project App Certificate.
-- `OPENAI_API_KEY` — OpenAI key with Realtime API access (required; validated at agent start).
+
+Provider-specific required variables:
+
+| Provider | Variables |
+| --- | --- |
+| OpenAI | `OPENAI_API_KEY` |
+| Azure | `AZURE_OPENAI_API_KEY`, `AZURE_OPENAI_REALTIME_URL`, `AZURE_OPENAI_REALTIME_MODEL` |
 
 Optional:
 
 | Variable | Default | Notes |
 | --- | :---: | --- |
+| `MLLM_VENDOR` | `openai` | Realtime provider: `openai` or `azure` |
 | `OPENAI_MODEL` | `gpt-4o-realtime-preview` | OpenAI Realtime model name |
 | `AGENT_GREETING` | built-in | Optional opening line override |
 
 ## API
 
 - `GET /get_config` — token + channel/UID config
+- `GET /vendors` — selectable realtime providers and required environment variables
 - `POST /startAgent` — start an agent session
 - `POST /stopAgent` — stop an agent session
 

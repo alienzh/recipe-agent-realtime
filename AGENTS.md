@@ -6,16 +6,17 @@ For coding agents working in `recipe-agent-realtime`. This repository is the
 ## System shape
 
 - **`server/`** — Python FastAPI agent backend (:8000). Owns Agora token
-  generation and agent session lifecycle. Uses `OpenAIRealtime` MLLM via
-  `.with_mllm()` — replaces the STT/LLM/TTS cascade. SDK: `agora-agents>=2.3.0`
+  generation and agent session lifecycle. Uses a selectable realtime MLLM via
+  `.with_mllm()` — replaces the STT/LLM/TTS cascade. SDK: `agora-agents`
   (`import agora_agent`).
 - **`web/`** — Next.js 16 / React 19 / TypeScript frontend (:3000).
 - Auth: Token007 from `AGORA_APP_ID` + `AGORA_APP_CERTIFICATE`.
-- No `llm/` service — single-process, MLLM is BYO-key (OPENAI_API_KEY required).
+- No `llm/` service — single-process, MLLM providers use BYO credentials.
 
 ## Pipeline
 
-`OpenAIRealtime` MLLM via `.with_mllm()` — voice-to-voice, no separate STT/LLM/TTS.
+`OpenAIRealtime` or `AzureOpenAIRealtime` via `.with_mllm()` — voice-to-voice,
+no separate STT/LLM/TTS.
 Turn detection is MLLM-owned (`server_vad`). No tools (MLLM is tool-less).
 
 ## Routing / ownership
@@ -24,7 +25,7 @@ Turn detection is MLLM-owned (`server_vad`). No tools (MLLM is tool-less).
 - Browser-facing `/api/*` paths are Next rewrites (`web/next.config.ts`) to the
   agent backend; do not add `web/app/api/**/route.ts` for agent/token logic.
 - Token generation and agent lifecycle live in `server/src/`.
-- MLLM vendor builder lives in `server/src/realtime_config.py`.
+- MLLM vendor registry and builders live in `server/src/realtime_config.py`.
 
 ## Supported modes
 
@@ -40,16 +41,22 @@ Turn detection is MLLM-owned (`server_vad`). No tools (MLLM is tool-less).
 |---|---|---|
 | `AGORA_APP_ID` | — | required |
 | `AGORA_APP_CERTIFICATE` | — | required |
-| `OPENAI_API_KEY` | — | **required** — validated at agent start (not server boot); needs OpenAI Realtime API access |
+| `MLLM_VENDOR` | `openai` | selected realtime provider (`openai` or `azure`) |
+| `OPENAI_API_KEY` | — | required for OpenAI; validated at agent start |
 | `OPENAI_MODEL` | `gpt-4o-realtime-preview` | OpenAI Realtime model name |
+| `AZURE_OPENAI_API_KEY` | — | required for Azure |
+| `AZURE_OPENAI_REALTIME_URL` | — | required Azure Realtime WebSocket URL |
+| `AZURE_OPENAI_REALTIME_MODEL` | — | required Azure deployment/model name |
 | `AGENT_GREETING` | built-in | Optional opening line override |
 
 ## Patterns
 
 - Keep the web client calling `/api/*`; hide backend placement behind Next rewrites.
 - Keep token generation and the App Certificate in `server/`.
-- `OPENAI_API_KEY` is validated in `agent.start()` — the server boots without it,
-  but `/startAgent` returns 400 until the key is set.
+- Provider settings are validated in `agent.start()` through the registry — the
+  server boots without them, but `/startAgent` reports any missing values.
+- Keep provider selection in the `/startAgent` request. Do not add it to RTC
+  token data or the conversation component contract.
 - `turn_detection` is MLLM-owned (`server_vad`); do not set a top-level
   `turn_detection` on `AgoraAgent(...)` when using `.with_mllm()`.
 
@@ -60,7 +67,7 @@ Turn detection is MLLM-owned (`server_vad`). No tools (MLLM is tool-less).
 - Do not put `PORT` in `server/.env.example` (it would clobber the random port
   that `verify:local:fastapi` injects via `load_dotenv(override=True)`).
 - Do not link to `docs/ai/` — that progressive-disclosure tree is not present yet.
-- Do not add tools — the OpenAIRealtime MLLM has no tool support.
+- Do not add tools — this realtime MLLM recipe does not enable tool support.
 
 ## Commands
 

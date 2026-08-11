@@ -160,6 +160,21 @@ async function main() {
       'GET /api/get_config should return an agent uid from FastAPI',
     )
 
+    const vendorsResponse = await requestViaRewrite('/api/vendors')
+    const vendorsBody = await getJson(vendorsResponse)
+    assert(vendorsResponse.status === 200, 'GET /api/vendors should proxy to the FastAPI app')
+    assert(vendorsBody.code === 0, 'GET /api/vendors should preserve the FastAPI success payload')
+    const vendorsData = vendorsBody.data as Record<string, unknown> | undefined
+    assert(typeof vendorsData?.default === 'string', 'GET /api/vendors should return a default vendor')
+    assert(
+      Array.isArray(vendorsData?.vendors) &&
+        vendorsData.vendors.some(
+          (vendor) =>
+            typeof vendor === 'object' && vendor !== null && (vendor as { name?: unknown }).name === 'azure',
+        ),
+      'GET /api/vendors should include Azure',
+    )
+
     const zeroUidResponse = await requestViaRewrite('/api/get_config?uid=0&channel=python-smoke')
     const zeroUidBody = await getJson(zeroUidResponse)
     assert(zeroUidResponse.status === 200, 'GET /api/get_config?uid=0 should proxy to the FastAPI app')

@@ -17,7 +17,7 @@ export const viewport: Viewport = {
 export const metadata: Metadata = {
 	title: "Realtime Recipe | Agora Conversational AI",
 	description:
-		"Recipe: voice-to-voice realtime model — talk directly to OpenAI Realtime, no separate STT/LLM/TTS.",
+		"Recipe: choose a realtime voice-to-voice provider with no separate STT/LLM/TTS pipeline.",
 	icons: {
 		icon: [
 			{ url: "/favicon.ico" },
